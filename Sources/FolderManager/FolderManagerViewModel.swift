@@ -8,7 +8,7 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-public final class FolderManagerViewModel: ObservableObject {
+internal final class FolderManagerViewModel: ObservableObject {
     @Published public var folders: [URL] = []
 
     private let storageFilename: String
@@ -31,14 +31,17 @@ public final class FolderManagerViewModel: ObservableObject {
         loadFolders()
     }
 
+    // TODO: - need to make this options more flexible for user of library
     public func pickFolder(filter: ((URL) -> Bool)?) throws {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
-        panel.canChooseFiles = false
+        panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
 
-        if panel.runModal() == .OK, let url = panel.url, filter?(url) ?? true {
-            try addFolder(url)
+        if panel.runModal() == .OK {
+            if let url = panel.url, filter?(url) ?? true {
+                try addFolder(url)
+            }
         }
     }
     
@@ -49,7 +52,7 @@ public final class FolderManagerViewModel: ObservableObject {
     }
 
     public func addFolder(_ url: URL) throws {
-        guard url.isFileURL, url.hasDirectoryPath, !folders.contains(url) else { return }
+        guard !folders.contains(url) else { return }
 
         folders.append(url)
         try saveBookmarks()

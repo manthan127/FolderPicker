@@ -28,11 +28,9 @@ public extension View {
     }
 }
 
-/// need to make this struct more flexible for general use case
-
 public struct FileDropModifier: ViewModifier {
     public var disable: Bool = false
-    public var allowedFormats: [UTType] = [UTType.directory]
+    public var allowedFormats: [UTType] = []
     public var filter: ((URL) -> Bool)? = nil
     public var filesURLFetched: URLsCompletion
     
@@ -46,20 +44,21 @@ public struct FileDropModifier: ViewModifier {
 
         var urls: [URL] = []
         let dispatchGroup = DispatchGroup()
-        // TODO: -  handle errors or failurs
+        // TODO: -  handle errors or failures
         for provider in providers {
             if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
                 dispatchGroup.enter()
                 provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
                     defer { dispatchGroup.leave() }
 
-                    guard let data = item as? Data,
-                          let url = URL(dataRepresentation: data, relativeTo: nil),
-                          self.allowedFormats.isEmpty || url.conformsAny(self.allowedFormats),
-                          filter?(url) ?? true
-                    else { return }
-
-                    urls.append(url)
+                    if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        let formatIsAllowed = allowedFormats.isEmpty || url.conformsAny(allowedFormats)
+                        let passesFilter = filter?(url) ?? true
+                        
+                        if formatIsAllowed && passesFilter {
+                            urls.append(url)
+                        }
+                    }
                 }
             }
         }
