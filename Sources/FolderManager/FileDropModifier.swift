@@ -13,7 +13,7 @@ public typealias URLsCompletion = (_ urls: [URL])-> Void
 public extension View {
     func onFileDrop(
         disabled: Bool = false,
-        allowedFormats: [UTType] = [UTType.directory],
+        allowedFormats: [UTType] = [],
         filter: ((URL) -> Bool)? = nil,
         onURLsFetched: @escaping URLsCompletion
     ) -> some View {
@@ -77,8 +77,9 @@ extension URL {
     }
     
     func conformsAny(_ types: [UTType])-> Bool {
-        fileType.map { fileType in
-            types.contains(where: { fileType.conforms(to: $0) })
-        } ?? false
+        if let fileType {
+            return types.contains(where: { fileType.conforms(to: $0) })
+        }
+        return false
     }
 }

@@ -9,7 +9,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 internal final class FolderManagerViewModel: ObservableObject {
-    @Published public var folders: [URL] = []
+    @Published var folders: [URL] = []
 
     private let storageFilename: String
     private var bookmarkFileURL: URL {
@@ -25,18 +25,19 @@ internal final class FolderManagerViewModel: ObservableObject {
     ///
     /// - Parameter storageFilename: An optional custom filename for storing bookmarks.
     ///   If `nil` or blank, defaults to `"folderBookmarks.plist"`.
-    public init(storageFilename: String? = nil) {
-        self.storageFilename = storageFilename.nonEmptyTrimmed ?? "folderBookmarks.plist"
+    init(storageFilename: String? = nil) {
+        self.storageFilename = storageFilename?.nonEmptyTrimmed ?? "folderBookmarks.plist"
         
         loadFolders()
     }
 
     // TODO: - need to make this options more flexible for user of library
-    public func pickFolder(filter: ((URL) -> Bool)?) throws {
+    func pickFolder(allowedFormats: [UTType], filter: ((URL) -> Bool)?) throws {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = allowedFormats
 
         if panel.runModal() == .OK {
             if let url = panel.url, filter?(url) ?? true {
@@ -45,26 +46,26 @@ internal final class FolderManagerViewModel: ObservableObject {
         }
     }
     
-    public func addFolders(_ urls: [URL], filter: ((URL) -> Bool)?) throws {
-        folders += Set(urls).filter{ !folders.contains($0) && (filter?($0) ?? true) }
+    func addFolders(_ urls: [URL]) throws {
+        folders += Set(urls).filter{ !folders.contains($0) }
         
         try saveBookmarks()
     }
 
-    public func addFolder(_ url: URL) throws {
-        guard !folders.contains(url) else { return }
-
-        folders.append(url)
-        try saveBookmarks()
-    }
-
-    public func removeFolder(_ url: URL) throws {
+    func removeFolder(_ url: URL) throws {
         folders.removeAll { $0 == url }
         try saveBookmarks()
     }
 }
 
 private extension FolderManagerViewModel {
+    func addFolder(_ url: URL) throws {
+        if folders.contains(url) { return }
+
+        folders.append(url)
+        try saveBookmarks()
+    }
+    
     func saveBookmarks() throws {
         let bookmarkDataArray: [Data] = folders.compactMap { url in
             try? url.bookmarkData(options: [.withSecurityScope], includingResourceValuesForKeys: nil, relativeTo: nil)
@@ -96,11 +97,8 @@ private extension FolderManagerViewModel {
 }
 
 
-extension Optional where Wrapped == String {
+extension String {
     var nonEmptyTrimmed: String? {
-        if let self {
-            if self.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { nil }
-            else { self }
-        } else { nil }
+        self.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }
