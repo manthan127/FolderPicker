@@ -65,7 +65,7 @@ public struct FolderManagerView<Destination: View>: View {
                 }
                 .onFileDrop(allowedFormats: [UTType.directory], filter: filter) { urls in
                     do {
-                        try viewModel.addFolders(urls)
+                        try viewModel.addFolders(urls, filter: filter)
                     } catch {
                         onError?(error)
                     }

@@ -45,8 +45,8 @@ internal final class FolderManagerViewModel: ObservableObject {
         }
     }
     
-    public func addFolders(_ urls: [URL]) throws {
-        folders += Set(urls).filter{ $0.isFileURL && $0.hasDirectoryPath && !folders.contains($0) }
+    public func addFolders(_ urls: [URL], filter: ((URL) -> Bool)?) throws {
+        folders += Set(urls).filter{ !folders.contains($0) && (filter?($0) ?? true) }
         
         try saveBookmarks()
     }
