@@ -10,25 +10,36 @@ import UniformTypeIdentifiers
 
 // TODO: - need to show indicator to the user what type of file is allowed (specially for droping the files)
 public struct FolderManagerView<Destination: View>: View {
-    @StateObject var viewModel: FolderManagerViewModel
+    @ObservedObject var viewModel: FolderManagerViewModel
     
-    let allowedFormats: [UTType]
-    let filter: ((URL) -> Bool)?
-    let onError: ((Error) -> ())?
-    let destinationBuilder: (URL) -> Destination
+    private let filterRules: FilterRules
+    private let onError: ErrorCompletion?
+    private let destinationBuilder: (URL) -> Destination
     
     public init(
-        storageFilename: String? = nil,
-        allowedFormats: [UTType] = [],
-        filter: ((URL) -> Bool)? = nil,
-        onError: ((Error) -> ())? = nil,
+        viewModel: FolderManagerViewModel,
+        filterRules: FilterRules,
+        onError: ErrorCompletion? = nil,
         destination: @escaping (URL) -> Destination
     ) {
         self.destinationBuilder = destination
-        self.allowedFormats = allowedFormats
-        self.filter = filter
+        self.filterRules = filterRules
         self.onError = onError
-        self._viewModel = StateObject(wrappedValue: FolderManagerViewModel(storageFilename: storageFilename))
+        self._viewModel = ObservedObject(wrappedValue: viewModel)
+    }
+    
+    public init(
+        storageFilename: String? = nil,
+        filterRules: FilterRules,
+        onError: ErrorCompletion? = nil,
+        destination: @escaping (URL) -> Destination
+    ) {
+        self.init(
+            viewModel: FolderManagerViewModel(storageFilename: storageFilename),
+            filterRules: filterRules,
+            onError: onError,
+            destination: destination
+        )
     }
     
     public var body: some View {
@@ -37,7 +48,7 @@ public struct FolderManagerView<Destination: View>: View {
                 HStack {
                     Button("Choose Folder") {
                         do {
-                            try viewModel.pickFolder(allowedFormats: allowedFormats, filter: filter)
+                            try viewModel.pickFolder(filterRules: filterRules)
                         } catch {
                             onError?(error)
                         }
@@ -83,12 +94,6 @@ public struct FolderManagerView<Destination: View>: View {
                 }
             }
         }
-        .onFileDrop(allowedFormats: allowedFormats, filter: filter) { urls in
-            do {
-                try viewModel.addFolders(urls)
-            } catch {
-                onError?(error)
-            }
-        }
+        .onFileDrop(viewModel: viewModel, filterRules: filterRules, onError: onError)
     }
 }

@@ -9,36 +9,59 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 public typealias URLsCompletion = (_ urls: [URL])-> Void
+public typealias ErrorCompletion = (Error) -> Void
 
 public extension View {
     func onFileDrop(
         disabled: Bool = false,
-        allowedFormats: [UTType] = [],
-        filter: ((URL) -> Bool)? = nil,
-        onURLsFetched: @escaping URLsCompletion
+        viewModel: FolderManagerViewModel,
+        filterRules: FilterRules = FilterRules(),
+        onError: ErrorCompletion? = nil,
+        onURLsFetched: URLsCompletion? = nil
     ) -> some View {
         self.modifier(
             FileDropModifier(
                 disable: disabled,
-                allowedFormats: allowedFormats,
-                filter: filter,
+                viewModel: viewModel,
+                filterRules: filterRules,
+                onError: onError,
                 filesURLFetched: onURLsFetched
             )
+        )
+    }
+    
+    func onFileDrop(
+        disabled: Bool = false,
+        storageFilename: String? = nil,
+        filterRules: FilterRules = FilterRules(),
+        onError: ErrorCompletion? = nil,
+        onURLsFetched: URLsCompletion? = nil
+    ) -> some View {
+        self.onFileDrop(
+            disabled: disabled,
+            viewModel: FolderManagerViewModel(storageFilename: storageFilename),
+            filterRules: filterRules,
+            onError: onError,
+            onURLsFetched: onURLsFetched
         )
     }
 }
 
 public struct FileDropModifier: ViewModifier {
     public var disable: Bool = false
-    public var allowedFormats: [UTType] = []
-    public var filter: ((URL) -> Bool)? = nil
-    public var filesURLFetched: URLsCompletion
+    
+    @ObservedObject public var viewModel: FolderManagerViewModel
+    public let filterRules: FilterRules
+    public var onError: ErrorCompletion?
+    public var filesURLFetched: URLsCompletion?
+    
+    private let fileURLIdentifier = UTType.fileURL.identifier
     
     public func body(content: Content) -> some View {
         content
-            .onDrop(of: [UTType.fileURL.identifier], isTargeted: nil, perform: filesDropAction)
+            .onDrop(of: [fileURLIdentifier], isTargeted: nil, perform: filesDropAction)
     }
-
+    
     private func filesDropAction(_ providers: [NSItemProvider]) -> Bool {
         guard !disable else { return false }
 
@@ -46,40 +69,27 @@ public struct FileDropModifier: ViewModifier {
         let dispatchGroup = DispatchGroup()
         // TODO: -  handle errors or failures
         for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(UTType.fileURL.identifier) {
+            if provider.hasItemConformingToTypeIdentifier(fileURLIdentifier) {
                 dispatchGroup.enter()
-                provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, error in
+                
+                provider.loadItem(forTypeIdentifier: fileURLIdentifier) { item, error in
                     defer { dispatchGroup.leave() }
-
-                    if let data = item as? Data, let url = URL(dataRepresentation: data, relativeTo: nil) {
-                        let formatIsAllowed = allowedFormats.isEmpty || url.conformsAny(allowedFormats)
-                        let passesFilter = filter?(url) ?? true
-                        
-                        if formatIsAllowed && passesFilter {
-                            urls.append(url)
-                        }
+                    
+                    if let url = item?.asURL(), filterRules.allows(url) {
+                        urls.append(url)
                     }
                 }
             }
         }
-
         dispatchGroup.notify(queue: .main) {
-            filesURLFetched(urls)
+            filesURLFetched?(urls)
+            do {
+                try viewModel.addFolders(urls)
+            } catch {
+                onError?(error)
+            }
         }
 
         return true
-    }
-}
-
-extension URL {
-    var fileType: UTType? {
-        try? self.resourceValues(forKeys: [.contentTypeKey]).contentType
-    }
-    
-    func conformsAny(_ types: [UTType])-> Bool {
-        if let fileType {
-            return types.contains(where: { fileType.conforms(to: $0) })
-        }
-        return false
     }
 }

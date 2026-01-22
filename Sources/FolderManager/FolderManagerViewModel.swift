@@ -8,7 +8,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-internal final class FolderManagerViewModel: ObservableObject {
+//TODO: - Two Different objects created at same time with same name will not be in sync and there is risk of data of one being overwritten by another one
+public final class FolderManagerViewModel: ObservableObject {
     @Published var folders: [URL] = []
 
     private let storageFilename: String
@@ -19,7 +20,7 @@ internal final class FolderManagerViewModel: ObservableObject {
         return dir.appendingPathComponent(storageFilename)
     }
 
-    /// Initializes a new instance, optionally with a custom storage filename.
+    /// Initialises a new instance, optionally with a custom storage filename.
     ///
     /// After setting the filename, it loads the folders from the specified storage.
     ///
@@ -32,15 +33,15 @@ internal final class FolderManagerViewModel: ObservableObject {
     }
 
     // TODO: - need to make this options more flexible for user of library
-    func pickFolder(allowedFormats: [UTType], filter: ((URL) -> Bool)?) throws {
+    func pickFolder(filterRules: FilterRules) throws {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = true
         panel.allowsMultipleSelection = false
-        panel.allowedContentTypes = allowedFormats
+        panel.allowedContentTypes = filterRules.allowedFormats
 
         if panel.runModal() == .OK {
-            if let url = panel.url, filter?(url) ?? true {
+            if let url = panel.url, filterRules.filter?(url) ?? true {
                 try addFolder(url)
             }
         }
@@ -93,12 +94,5 @@ private extension FolderManagerViewModel {
                 print("Failed to resolve bookmark: \(error)")
             }
         }
-    }
-}
-
-
-extension String {
-    var nonEmptyTrimmed: String? {
-        self.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : self
     }
 }
