@@ -61,27 +61,15 @@ public struct FileDropModifier: ViewModifier {
         content
             .onDrop(of: [fileURLIdentifier], isTargeted: nil, perform: filesDropAction)
     }
-    
-    private func filesDropAction(_ providers: [NSItemProvider]) -> Bool {
-        guard !disable else { return false }
+}
 
-        var urls: [URL] = []
-        let dispatchGroup = DispatchGroup()
-        // TODO: -  handle errors or failures
-        for provider in providers {
-            if provider.hasItemConformingToTypeIdentifier(fileURLIdentifier) {
-                dispatchGroup.enter()
-                
-                provider.loadItem(forTypeIdentifier: fileURLIdentifier) { item, error in
-                    defer { dispatchGroup.leave() }
-                    
-                    if let url = item?.asURL(), filterRules.allows(url) {
-                        urls.append(url)
-                    }
-                }
-            }
-        }
-        dispatchGroup.notify(queue: .main) {
+private extension FileDropModifier {
+    func filesDropAction(_ providers: [NSItemProvider]) -> Bool {
+        guard !disable else { return false }
+        
+        Task {
+            let urls = await getURLs(providers)
+            
             filesURLFetched?(urls)
             do {
                 try viewModel.addFolders(urls)
@@ -91,5 +79,26 @@ public struct FileDropModifier: ViewModifier {
         }
 
         return true
+    }
+    
+    func getURLs(_ providers: [NSItemProvider]) async -> [URL] {
+        await withTaskGroup(of: URL?.self, returning: [URL].self) { group in
+            for provider in providers where provider.hasItemConformingToTypeIdentifier(fileURLIdentifier) {
+                group.addTask {
+                   await getURL(provider: provider)
+                }
+            }
+            
+            return await group.arrayValue().compactMap(\.self)
+        }
+    }
+
+    // TODO: - handle errors or failures
+    func getURL(provider: NSItemProvider) async -> URL? {
+        if let item = try? await provider.loadItem(forTypeIdentifier: fileURLIdentifier),
+           let url = item.asURL(), filterRules.allows(url) {
+            return url
+        }
+        return nil
     }
 }
